@@ -20,6 +20,8 @@ import com.google.gson.reflect.TypeToken
 import io.github.romanvht.byedpi.R
 import io.github.romanvht.byedpi.activities.TestActivity
 import io.github.romanvht.byedpi.data.*
+import io.github.romanvht.byedpi.genetic.GeneticMutationEngine
+import io.github.romanvht.byedpi.ml.NetworkMlEngine
 import io.github.romanvht.byedpi.utility.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -212,6 +214,25 @@ class TestService : Service() {
                     stopEngine()
                     currentStrategy = null
                     delay(options.delaySec * 500L)
+                }
+
+                // Интеграция ML-обучения и Генетических Мутаций по завершении тестирования
+                val mlEngine = NetworkMlEngine(this@TestService)
+                if (getPreferences().getBoolean("byedpi_network_ml_enabled", true)) {
+                    mlEngine.trainAndSave(strategies)
+                }
+
+                if (getPreferences().getBoolean("byedpi_genetic_enabled", false)) {
+                    val sniValue = getPreferences().getStringNotNull("byedpi_proxytest_sni", "google.com")
+                    val mutatedNextGen = GeneticMutationEngine.generateNextGeneration(
+                        currentResults = strategies,
+                        targetCount = strategies.size.coerceAtLeast(10),
+                        sni = sniValue
+                    )
+                    getPreferences().edit(commit = true) {
+                        putBoolean("byedpi_proxytest_usercommands", true)
+                        putString("byedpi_proxytest_commands", mutatedNextGen.joinToString("\n"))
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
