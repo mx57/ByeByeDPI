@@ -50,6 +50,20 @@
         app:iconSpaceReserved="false" />
 
     <SwitchPreference
+        android:key="byedpi_genetic_enabled"
+        android:title="Генетическая мутация стратегий"
+        android:summary="Генерировать новые стратегии с помощью скрещивания и мутаций"
+        android:defaultValue="false"
+        app:iconSpaceReserved="false" />
+
+    <SwitchPreference
+        android:key="byedpi_network_ml_enabled"
+        android:title="ML-адаптация к сети провайдера"
+        android:summary="Автоматически обучать профиль для каждой Wi-Fi/Cellular сети"
+        android:defaultValue="true"
+        app:iconSpaceReserved="false" />
+
+    <SwitchPreference
         android:key="byedpi_proxytest_usercommands"
         android:title="@string/test_settings_usercommands"
         app:iconSpaceReserved="false" />
