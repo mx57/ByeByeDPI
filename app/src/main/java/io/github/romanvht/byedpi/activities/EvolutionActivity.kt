@@ -12,11 +12,15 @@ import androidx.core.content.edit
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButton
 import io.github.romanvht.byedpi.R
+import io.github.romanvht.byedpi.adapters.StrategyResultAdapter
 import io.github.romanvht.byedpi.data.Mode
 import io.github.romanvht.byedpi.genetic.EvolutionState
 import io.github.romanvht.byedpi.genetic.GeneticEvolutionService
+import io.github.romanvht.byedpi.ml.NetworkDetector
 import io.github.romanvht.byedpi.services.ServiceManager
 import io.github.romanvht.byedpi.utility.getPreferences
 import io.github.romanvht.byedpi.utility.mode
@@ -25,15 +29,19 @@ import kotlinx.coroutines.launch
 
 class EvolutionActivity : BaseActivity() {
 
+    private lateinit var tvNetworkInfo: TextView
     private lateinit var tvStatus: TextView
     private lateinit var tvCurrentTested: TextView
     private lateinit var tvBestCommand: TextView
     private lateinit var tvBestSuccessRate: TextView
+    private lateinit var tvBestSiteDetails: TextView
     private lateinit var tvGenerationsInfo: TextView
     private lateinit var tvElapsedTime: TextView
     private lateinit var progressBar: ProgressBar
     private lateinit var btnStartStop: MaterialButton
     private lateinit var btnApplyBest: MaterialButton
+    private lateinit var rvEvaluatedStrategies: RecyclerView
+    private lateinit var strategyAdapter: StrategyResultAdapter
 
     private var currentBestCommand: String = ""
 
@@ -44,15 +52,29 @@ class EvolutionActivity : BaseActivity() {
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         supportActionBar?.setTitle("Эволюция стратегий ByeDPI")
 
+        tvNetworkInfo = findViewById(R.id.tvNetworkInfo)
         tvStatus = findViewById(R.id.tvStatus)
         tvCurrentTested = findViewById(R.id.tvCurrentTested)
         tvBestCommand = findViewById(R.id.tvBestCommand)
         tvBestSuccessRate = findViewById(R.id.tvBestSuccessRate)
+        tvBestSiteDetails = findViewById(R.id.tvBestSiteDetails)
         tvGenerationsInfo = findViewById(R.id.tvGenerationsInfo)
         tvElapsedTime = findViewById(R.id.tvElapsedTime)
         progressBar = findViewById(R.id.progressBar)
         btnStartStop = findViewById(R.id.btnStartStop)
         btnApplyBest = findViewById(R.id.btnApplyBest)
+        rvEvaluatedStrategies = findViewById(R.id.rvEvaluatedStrategies)
+
+        strategyAdapter = StrategyResultAdapter(this, onApply = { cmd ->
+            val prefs = getPreferences()
+            prefs.edit(commit = true) { putString("byedpi_cmd_args", cmd) }
+            val mode = prefs.mode()
+            ServiceManager.restart(this, mode)
+            Toast.makeText(this, "Мутировавшая стратегия применена!", Toast.LENGTH_SHORT).show()
+        })
+
+        rvEvaluatedStrategies.layoutManager = LinearLayoutManager(this)
+        rvEvaluatedStrategies.adapter = strategyAdapter
 
         btnStartStop.setOnClickListener {
             if (GeneticEvolutionService.isRunning) {
@@ -106,6 +128,9 @@ class EvolutionActivity : BaseActivity() {
         btnStartStop.text = if (state.isRunning) "Остановить" else "Запустить Эволюцию"
         progressBar.visibility = if (state.isRunning) View.VISIBLE else View.GONE
 
+        val netId = if (state.networkId.isNotBlank()) state.networkId else NetworkDetector.getCurrentNetworkId(this)
+        tvNetworkInfo.text = "Сеть провайдера: $netId"
+
         tvStatus.text = if (state.statusMessage.isNotBlank()) state.statusMessage else "Готов к запуску"
         tvCurrentTested.text = if (state.currentTestedCommand.isNotBlank()) "Текущая проверка: ${state.currentTestedCommand}" else "Текущая проверка: -"
 
@@ -113,14 +138,23 @@ class EvolutionActivity : BaseActivity() {
             currentBestCommand = state.bestCommand
             tvBestCommand.text = state.bestCommand
             tvBestSuccessRate.text = "Проходимость: ${(state.bestSuccessRate * 100).toInt()}%"
+            if (state.bestSiteResultsSummary.isNotBlank()) {
+                tvBestSiteDetails.visibility = View.VISIBLE
+                tvBestSiteDetails.text = state.bestSiteResultsSummary
+            } else {
+                tvBestSiteDetails.visibility = View.GONE
+            }
             btnApplyBest.isEnabled = true
         } else {
             btnApplyBest.isEnabled = false
+            tvBestSiteDetails.visibility = View.GONE
         }
 
         tvGenerationsInfo.text = "Поколение: ${state.currentGeneration} / ${if (state.totalGenerations > 0) state.totalGenerations else "∞"}"
         val minutes = state.elapsedTimeSeconds / 60
         val seconds = state.elapsedTimeSeconds % 60
         tvElapsedTime.text = String.format("Прошло времени: %02d:%02d", minutes, seconds)
+
+        strategyAdapter.updateStrategies(state.evaluatedStrategies)
     }
 }

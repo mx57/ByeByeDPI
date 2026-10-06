@@ -95,20 +95,39 @@ class GeneticEvolutionService : Service() {
     private fun startEvolutionLoop() {
         evolutionJob = scope.launch(Dispatchers.IO) {
             val settings = loadSettings()
+            val netId = io.github.romanvht.byedpi.ml.NetworkDetector.getCurrentNetworkId(this@GeneticEvolutionService)
             val startTime = System.currentTimeMillis()
             var currentGeneration = 1
             var bestCmd = settings.baseCommand
             var bestRatio = 0f
+            var bestSiteSummary = ""
 
-            val initialGenome = StrategyGenome.parse(settings.baseCommand)
+            // Загружаем топы из предыдущих проверок подборщика
+            val testResults = loadTestResults()
+            val topFromTest = testResults.sortedByDescending { if (it.totalRequests > 0) it.successCount.toFloat() / it.totalRequests else 0f }
+                .take(settings.topParentsCount)
+                .map { it.command }
+
+            val initialGenomes = if (topFromTest.isNotEmpty()) {
+                topFromTest.map { StrategyGenome.parse(it) }
+            } else {
+                listOf(StrategyGenome.parse(settings.baseCommand))
+            }
+
             var currentPopulation = mutableListOf<StrategyResult>()
 
-            // Создаем первичные варианты популяций вокруг базовой стратегии
-            val populationCmds = mutableListOf<String>()
+            val populationCmds = mutableSetOf<String>()
+            populationCmds.addAll(topFromTest)
             populationCmds.add(settings.baseCommand)
-            for (i in 1 until settings.populationSize) {
-                populationCmds.add(StrategyGenome.mutate(initialGenome, settings.mutationRate).toCommandLine(settings.sni))
+
+            var attempts = 0
+            while (populationCmds.size < settings.populationSize && attempts < 100) {
+                attempts++
+                val p = initialGenomes.random()
+                populationCmds.add(StrategyGenome.mutate(p, settings.mutationRate).toCommandLine(settings.sni))
             }
+
+            val curCmds = populationCmds.toMutableList()
 
             try {
                 while (isActive && !mutableState.value.isStopping) {
@@ -134,24 +153,26 @@ class GeneticEvolutionService : Service() {
 
                     updateState {
                         it.copy(
+                            networkId = netId,
                             currentGeneration = currentGeneration,
                             totalGenerations = settings.maxGenerations,
                             bestCommand = bestCmd,
                             bestSuccessRate = bestRatio,
+                            bestSiteResultsSummary = bestSiteSummary,
                             elapsedTimeSeconds = elapsedTimeSec,
-                            statusMessage = "Поколение $currentGeneration: тестирование ${populationCmds.size} мутаций"
+                            statusMessage = "Поколение $currentGeneration: тестирование ${curCmds.size} мутаций"
                         )
                     }
 
                     val genResults = mutableListOf<StrategyResult>()
 
-                    for ((idx, cmd) in populationCmds.withIndex()) {
+                    for ((idx, cmd) in curCmds.withIndex()) {
                         if (!isActive || mutableState.value.isStopping) break
 
                         updateState {
                             it.copy(
                                 currentTestedCommand = cmd,
-                                statusMessage = "Поколение $currentGeneration [$idx/${populationCmds.size}]: $cmd"
+                                statusMessage = "Поколение $currentGeneration [${idx + 1}/${curCmds.size}]: $cmd"
                             )
                         }
 
@@ -159,9 +180,19 @@ class GeneticEvolutionService : Service() {
                         genResults.add(result)
 
                         val ratio = if (result.totalRequests > 0) result.successCount.toFloat() / result.totalRequests else 0f
-                        if (ratio > bestRatio) {
+                        if (ratio >= bestRatio) {
                             bestRatio = ratio
                             bestCmd = cmd
+                            bestSiteSummary = result.siteResults.joinToString("\n") { site -> "${site.site}: ${site.successCount}/${site.totalCount}" }
+                        }
+
+                        updateState {
+                            it.copy(
+                                evaluatedStrategies = genResults.toList(),
+                                bestCommand = bestCmd,
+                                bestSuccessRate = bestRatio,
+                                bestSiteResultsSummary = bestSiteSummary
+                            )
                         }
                     }
 
@@ -179,8 +210,8 @@ class GeneticEvolutionService : Service() {
                         sni = settings.sni
                     )
 
-                    populationCmds.clear()
-                    populationCmds.addAll(nextGenCmds)
+                    curCmds.clear()
+                    curCmds.addAll(nextGenCmds)
 
                     currentGeneration++
                 }
@@ -208,24 +239,37 @@ class GeneticEvolutionService : Service() {
 
     private suspend fun evaluateStrategy(cmd: String, settings: EvolutionSettings): StrategyResult {
         val result = StrategyResult(command = cmd)
-        val domainList = DomainListUtils.getActiveDomains(this).toList()
-        val sites = if (domainList.isNotEmpty()) domainList else listOf("google.com", "youtube.com")
-        result.totalRequests = sites.size
+        val prefs = getPreferences()
+        DomainListUtils.syncLists(this)
+        val sites = DomainListUtils.getActiveDomains(this).toList()
+        val requestsCount = prefs.getIntStringNotNull("byedpi_proxytest_requests", 1).coerceAtLeast(1)
+        val requestTimeout = prefs.getLongStringNotNull("byedpi_proxytest_timeout", 5).coerceAtLeast(1)
+        val requestLimit = prefs.getIntStringNotNull("byedpi_proxytest_limit", 20).coerceAtLeast(1)
+        val delaySec = prefs.getIntStringNotNull("byedpi_proxytest_delay", 1).coerceAtLeast(0)
+        val host = prefs.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
+        val port = prefs.getIntStringNotNull("byedpi_proxy_port", 1080)
+
+        result.totalRequests = sites.size * requestsCount
 
         try {
-            val config = testConfiguration(this, cmd, "127.0.0.1", 1080)
+            val config = testConfiguration(this, cmd, host, port)
             val nativeEng = startEngine(config)
 
             supervisorScope {
                 val engineExit = async { nativeEng.awaitExit() }
                 val check = async {
-                    delay(500)
-                    SiteCheckUtils("127.0.0.1", config.port).checkSitesAsync(
+                    delay(delaySec * 500L)
+                    val connectHost = when (config.host) {
+                        "0.0.0.0" -> "127.0.0.1"
+                        "::", "[::]" -> "::1"
+                        else -> config.host
+                    }
+                    SiteCheckUtils(connectHost, config.port).checkSitesAsync(
                         sites = sites,
-                        requestsCount = 1,
-                        requestTimeout = 3,
-                        concurrentRequests = 10,
-                        fullLog = false,
+                        requestsCount = requestsCount,
+                        requestTimeout = requestTimeout,
+                        concurrentRequests = requestLimit,
+                        fullLog = true,
                         onSiteChecked = { site, successCount, countRequests ->
                             result.currentProgress += countRequests
                             result.successCount += successCount
@@ -250,6 +294,18 @@ class GeneticEvolutionService : Service() {
         return result
     }
 
+    private fun loadTestResults(): List<StrategyResult> {
+        return try {
+            val file = android.util.AtomicFile(java.io.File(filesDir, "proxy_test_results.json"))
+            file.openRead().bufferedReader().use { reader ->
+                val type = object : com.google.gson.reflect.TypeToken<List<StrategyResult>>() {}.type
+                com.google.gson.Gson().fromJson<List<StrategyResult>>(reader, type) ?: emptyList()
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
     private suspend fun startEngine(configuration: Configuration): NativeEngine {
         val current = NativeEngine(applicationContext, Mode.Proxy, foreground = false)
         engine = current
@@ -268,6 +324,7 @@ class GeneticEvolutionService : Service() {
     private fun loadSettings(): EvolutionSettings {
         val prefs = getPreferences()
         val baseCmd = prefs.getString("byedpi_cmd_args", "--split 1+s") ?: "--split 1+s"
+        val topParents = prefs.getIntStringNotNull("evolution_top_parents_count", 5)
         val timeLimit = prefs.getIntStringNotNull("evolution_time_limit", 10)
         val targetRate = prefs.getIntStringNotNull("evolution_target_rate", 95)
         val maxGen = prefs.getIntStringNotNull("evolution_max_gen", 20)
@@ -277,6 +334,7 @@ class GeneticEvolutionService : Service() {
         DomainListUtils.syncLists(this)
         return EvolutionSettings(
             baseCommand = baseCmd,
+            topParentsCount = topParents,
             timeLimitMinutes = timeLimit,
             targetSuccessRatePercent = targetRate,
             maxGenerations = maxGen,

@@ -38,4 +38,13 @@
         app:useSimpleSummaryProvider="true"
         app:iconSpaceReserved="false" />
 
+    <EditTextPreference
+        android:key="evolution_top_parents_count"
+        android:title="Число лучших стратегий из подбора"
+        android:summary="Сколько самых проходимых стратегий использовать в качестве исходных родителей"
+        android:inputType="number"
+        android:defaultValue="5"
+        app:useSimpleSummaryProvider="true"
+        app:iconSpaceReserved="false" />
+
 </PreferenceScreen>
