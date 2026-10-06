@@ -35,6 +35,7 @@ class EvolutionActivity : BaseActivity() {
     private lateinit var tvBestCommand: TextView
     private lateinit var tvBestSuccessRate: TextView
     private lateinit var tvBestSiteDetails: TextView
+    private lateinit var btnToggleDomains: MaterialButton
     private lateinit var tvGenerationsInfo: TextView
     private lateinit var tvElapsedTime: TextView
     private lateinit var progressBar: ProgressBar
@@ -43,6 +44,7 @@ class EvolutionActivity : BaseActivity() {
     private lateinit var rvEvaluatedStrategies: RecyclerView
     private lateinit var strategyAdapter: StrategyResultAdapter
 
+    private var isDomainsExpanded = false
     private var currentBestCommand: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,6 +60,7 @@ class EvolutionActivity : BaseActivity() {
         tvBestCommand = findViewById(R.id.tvBestCommand)
         tvBestSuccessRate = findViewById(R.id.tvBestSuccessRate)
         tvBestSiteDetails = findViewById(R.id.tvBestSiteDetails)
+        btnToggleDomains = findViewById(R.id.btnToggleDomains)
         tvGenerationsInfo = findViewById(R.id.tvGenerationsInfo)
         tvElapsedTime = findViewById(R.id.tvElapsedTime)
         progressBar = findViewById(R.id.progressBar)
@@ -75,6 +78,17 @@ class EvolutionActivity : BaseActivity() {
 
         rvEvaluatedStrategies.layoutManager = LinearLayoutManager(this)
         rvEvaluatedStrategies.adapter = strategyAdapter
+
+        btnToggleDomains.setOnClickListener {
+            isDomainsExpanded = !isDomainsExpanded
+            if (isDomainsExpanded) {
+                tvBestSiteDetails.visibility = View.VISIBLE
+                btnToggleDomains.text = "Скрыть детали по доменам ▲"
+            } else {
+                tvBestSiteDetails.visibility = View.GONE
+                btnToggleDomains.text = "Показать детали по доменам ▼"
+            }
+        }
 
         btnStartStop.setOnClickListener {
             if (GeneticEvolutionService.isRunning) {
@@ -139,14 +153,17 @@ class EvolutionActivity : BaseActivity() {
             tvBestCommand.text = state.bestCommand
             tvBestSuccessRate.text = "Проходимость: ${(state.bestSuccessRate * 100).toInt()}%"
             if (state.bestSiteResultsSummary.isNotBlank()) {
-                tvBestSiteDetails.visibility = View.VISIBLE
+                btnToggleDomains.visibility = View.VISIBLE
                 tvBestSiteDetails.text = state.bestSiteResultsSummary
+                tvBestSiteDetails.visibility = if (isDomainsExpanded) View.VISIBLE else View.GONE
             } else {
+                btnToggleDomains.visibility = View.GONE
                 tvBestSiteDetails.visibility = View.GONE
             }
             btnApplyBest.isEnabled = true
         } else {
             btnApplyBest.isEnabled = false
+            btnToggleDomains.visibility = View.GONE
             tvBestSiteDetails.visibility = View.GONE
         }
 

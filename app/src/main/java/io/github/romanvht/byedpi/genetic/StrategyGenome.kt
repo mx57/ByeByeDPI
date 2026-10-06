@@ -60,6 +60,24 @@ data class StrategyGenome(
         )
     }
 
+    /**
+     * Сравнивает с другим геномом и возвращает список измененных/мутировавших параметров.
+     */
+    fun getDiff(other: StrategyGenome): List<String> {
+        val diffs = mutableListOf<String>()
+        if (this.splitMode != other.splitMode && this.splitMode.isNotEmpty()) diffs.add(this.splitMode)
+        if (this.disorderMode != other.disorderMode && this.disorderMode.isNotEmpty()) diffs.add(this.disorderMode)
+        if (this.oobMode != other.oobMode && this.oobMode.isNotEmpty()) diffs.add(this.oobMode)
+        if (this.ttlMode != other.ttlMode && this.ttlMode.isNotEmpty()) diffs.add(this.ttlMode)
+        if (this.tlsrecMode != other.tlsrecMode && this.tlsrecMode.isNotEmpty()) diffs.add(this.tlsrecMode)
+        if (this.foolMode != other.foolMode && this.foolMode.isNotEmpty()) diffs.add(this.foolMode)
+        if (this.hostmix != other.hostmix && this.hostmix) diffs.add("--hostmix")
+        if (this.hostcase != other.hostcase && this.hostcase) diffs.add("--hostcase")
+        if (this.hostspell != other.hostspell && this.hostspell) diffs.add("--hostspell")
+        if (this.auto != other.auto && this.auto.isNotEmpty()) diffs.add(this.auto)
+        return diffs
+    }
+
     companion object {
         private val SPLIT_OPTIONS = listOf("", "--split 1+s", "--split 2+s", "--split 3", "--split 1+m", "--split 2+m", "--split 1+s+m", "--split 1")
         private val DISORDER_OPTIONS = listOf("", "--disorder 1+s", "--disorder 2", "--disorder 3+s", "--disorder 1+m", "--disorder 1")
