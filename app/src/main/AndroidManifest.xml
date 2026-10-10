@@ -75,6 +75,21 @@
             android:label="@string/title_settings"
             android:exported="false"/>
 
+        <activity
+            android:name=".activities.EvolutionActivity"
+            android:label="Эволюция стратегий ByeDPI"
+            android:exported="false"/>
+
+        <activity
+            android:name=".activities.EvolutionSettingsActivity"
+            android:label="Настройки Эволюции"
+            android:exported="false"/>
+
+        <service
+            android:name=".genetic.GeneticEvolutionService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false"/>
+
         <service android:name=".services.ByeDpiVpnService"
             android:process=":native"
             android:permission="android.permission.BIND_VPN_SERVICE"

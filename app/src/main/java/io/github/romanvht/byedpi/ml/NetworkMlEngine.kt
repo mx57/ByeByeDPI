@@ -83,21 +83,35 @@ class NetworkMlEngine(private val context: Context) {
     }
 
     /**
-     * Взвешенный ML-оцениватель (эвристическая скоринговая модель):
-     * Анализирует признаки команд (split, disorder, fool, ttl, tlsrec) и вычисляет взвешенную вероятность обхода DPI.
+     * Продвинутый ML-оцениватель с весами признаков, штрафом за избыточность команд
+     * и обучением на базе предыдущей истории провайдера.
      */
     fun predictMlScore(command: String, empiricalFitness: Double): Double {
-        var featureScore = 0.5
+        val currentProfile = getCurrentProfile()
+        var featureScore = 0.40
 
-        if (command.contains("--split")) featureScore += 0.15
-        if (command.contains("--disorder")) featureScore += 0.15
+        // Анализ эффективности комбинаций
+        if (command.contains("--split") && command.contains("--disorder")) featureScore += 0.20
+        else if (command.contains("--split") || command.contains("--disorder")) featureScore += 0.10
+
         if (command.contains("--oob")) featureScore += 0.10
         if (command.contains("--ttl")) featureScore += 0.10
         if (command.contains("--tlsrec")) featureScore += 0.10
         if (command.contains("--fool")) featureScore += 0.10
-        if (command.contains("--hostmix")) featureScore += 0.05
+        if (command.contains("--hostmix") || command.contains("--hostcase")) featureScore += 0.05
 
-        // Совместная комбинация ML-оценки генома и реальных замеров тестирования (70% опыт, 30% априорная модель)
-        return (empiricalFitness * 0.70 + featureScore.coerceIn(0.0, 1.0) * 0.30).coerceIn(0.0, 1.0)
+        // Бонус за сходство с топовыми стратегиями этой конкретной сети
+        if (currentProfile.topStrategies.any { top -> top.isNotBlank() && command.contains(top.take(10)) }) {
+            featureScore += 0.15
+        }
+
+        // Небольшой штраф за избыточно длинные дублирующиеся аргументы
+        val tokenCount = command.split(" ").size
+        if (tokenCount > 8) {
+            featureScore -= 0.05
+        }
+
+        // Итоговая баесовская взвешенная оценка (80% результаты реальной проверки, 20% ML-модель)
+        return (empiricalFitness * 0.80 + featureScore.coerceIn(0.0, 1.0) * 0.20).coerceIn(0.0, 1.0)
     }
 }

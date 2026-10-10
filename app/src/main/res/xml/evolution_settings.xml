@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <EditTextPreference
+        android:key="evolution_time_limit"
+        android:title="Лимит времени (в минутах)"
+        android:summary="0 - без лимита по времени"
+        android:inputType="number"
+        android:defaultValue="10"
+        app:useSimpleSummaryProvider="true"
+        app:iconSpaceReserved="false" />
+
+    <EditTextPreference
+        android:key="evolution_target_rate"
+        android:title="Целевой % проходимости сайтов"
+        android:summary="Эволюция остановится при достижении этого процента (напр. 95)"
+        android:inputType="number"
+        android:defaultValue="95"
+        app:useSimpleSummaryProvider="true"
+        app:iconSpaceReserved="false" />
+
+    <EditTextPreference
+        android:key="evolution_max_gen"
+        android:title="Лимит поколений"
+        android:summary="Максимальное число итераций эволюции (0 - без лимита)"
+        android:inputType="number"
+        android:defaultValue="20"
+        app:useSimpleSummaryProvider="true"
+        app:iconSpaceReserved="false" />
+
+    <EditTextPreference
+        android:key="evolution_pop_size"
+        android:title="Размер популяции"
+        android:summary="Количество мутаций за одно поколение"
+        android:inputType="number"
+        android:defaultValue="8"
+        app:useSimpleSummaryProvider="true"
+        app:iconSpaceReserved="false" />
+
+    <EditTextPreference
+        android:key="evolution_top_parents_count"
+        android:title="Число лучших стратегий из подбора"
+        android:summary="Сколько самых проходимых стратегий использовать в качестве исходных родителей"
+        android:inputType="number"
+        android:defaultValue="5"
+        app:useSimpleSummaryProvider="true"
+        app:iconSpaceReserved="false" />
+
+</PreferenceScreen>

@@ -172,6 +172,15 @@ class StrategyResultAdapter(
         notifyDataSetChanged()
     }
 
+    fun removeAt(position: Int): StrategyResult? {
+        if (position in strategies.indices) {
+            val removed = strategies.removeAt(position)
+            notifyItemRemoved(position)
+            return removed
+        }
+        return null
+    }
+
     private fun showCommandMenu(command: String) {
         val menuItems = arrayOf(
             context.getString(R.string.cmd_history_apply),

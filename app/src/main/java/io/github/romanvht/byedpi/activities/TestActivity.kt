@@ -69,6 +69,28 @@ class TestActivity : BaseActivity() {
         strategiesRecyclerView.layoutManager = LinearLayoutManager(this)
         strategiesRecyclerView.adapter = strategyAdapter
 
+        val itemTouchHelper = androidx.recyclerview.widget.ItemTouchHelper(
+            object : androidx.recyclerview.widget.ItemTouchHelper.SimpleCallback(0, androidx.recyclerview.widget.ItemTouchHelper.LEFT) {
+                override fun onMove(
+                    recyclerView: RecyclerView,
+                    viewHolder: RecyclerView.ViewHolder,
+                    target: RecyclerView.ViewHolder
+                ): Boolean = false
+
+                override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {
+                    val pos = viewHolder.adapterPosition
+                    if (pos != RecyclerView.NO_POSITION) {
+                        val removed = strategyAdapter.removeAt(pos)
+                        if (removed != null) {
+                            strategies.remove(removed)
+                            Toast.makeText(this@TestActivity, "Стратегия удалена из списка", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+        )
+        itemTouchHelper.attachToRecyclerView(strategiesRecyclerView)
+
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 TestService.state.collect { state ->
@@ -116,6 +138,10 @@ class TestActivity : BaseActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
+            R.id.action_evolution -> {
+                startActivity(Intent(this, EvolutionActivity::class.java))
+                true
+            }
             R.id.action_copy_log -> {
                 copyLog()
                 true
