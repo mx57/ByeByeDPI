@@ -1,5 +1,7 @@
 package io.github.romanvht.byedpi.genetic
 
+import io.github.romanvht.byedpi.data.StrategyResult
+
 /**
  * Настройки и критерии остановки работы движка эволюции.
  */
@@ -23,11 +25,14 @@ data class EvolutionState(
     val networkId: String = "",
     val currentGeneration: Int = 0,
     val totalGenerations: Int = 20,
+    val populationSize: Int = 8,
+    val currentTestedIndex: Int = 0,
+    val totalTestedCount: Int = 0,
     val bestCommand: String = "",
     val bestSuccessRate: Float = 0f,
     val bestSiteResultsSummary: String = "",
     val currentTestedCommand: String = "",
     val elapsedTimeSeconds: Long = 0,
     val statusMessage: String = "",
-    val evaluatedStrategies: List<io.github.romanvht.byedpi.data.StrategyResult> = emptyList()
+    val evaluatedStrategies: List<StrategyResult> = emptyList()
 )

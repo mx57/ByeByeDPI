@@ -12,6 +12,7 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import io.github.romanvht.byedpi.R
 import io.github.romanvht.byedpi.activities.EvolutionActivity
 import io.github.romanvht.byedpi.data.Configuration
@@ -19,7 +20,6 @@ import io.github.romanvht.byedpi.data.Mode
 import io.github.romanvht.byedpi.data.StrategyResult
 import io.github.romanvht.byedpi.ml.NetworkMlEngine
 import io.github.romanvht.byedpi.services.NativeEngine
-import io.github.romanvht.byedpi.services.ServiceManager
 import io.github.romanvht.byedpi.utility.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -98,9 +98,13 @@ class GeneticEvolutionService : Service() {
             val netId = io.github.romanvht.byedpi.ml.NetworkDetector.getCurrentNetworkId(this@GeneticEvolutionService)
             val startTime = System.currentTimeMillis()
             var currentGeneration = 1
+            var totalTestedCount = 0
             var bestCmd = settings.baseCommand
             var bestRatio = 0f
             var bestSiteSummary = ""
+            var stagnationCount = 0
+
+            val testedHistory = mutableSetOf<String>()
 
             // Загружаем топы из предыдущих проверок подборщика
             val testResults = loadTestResults()
@@ -156,6 +160,7 @@ class GeneticEvolutionService : Service() {
                             networkId = netId,
                             currentGeneration = currentGeneration,
                             totalGenerations = settings.maxGenerations,
+                            populationSize = curCmds.size,
                             bestCommand = bestCmd,
                             bestSuccessRate = bestRatio,
                             bestSiteResultsSummary = bestSiteSummary,
@@ -165,12 +170,18 @@ class GeneticEvolutionService : Service() {
                     }
 
                     val genResults = mutableListOf<StrategyResult>()
+                    var improvedInThisGen = false
 
                     for ((idx, cmd) in curCmds.withIndex()) {
                         if (!isActive || mutableState.value.isStopping) break
 
+                        testedHistory.add(cmd)
+                        totalTestedCount++
+
                         updateState {
                             it.copy(
+                                currentTestedIndex = idx + 1,
+                                totalTestedCount = totalTestedCount,
                                 currentTestedCommand = cmd,
                                 statusMessage = "Поколение $currentGeneration [${idx + 1}/${curCmds.size}]: $cmd"
                             )
@@ -180,10 +191,19 @@ class GeneticEvolutionService : Service() {
                         genResults.add(result)
 
                         val ratio = if (result.totalRequests > 0) result.successCount.toFloat() / result.totalRequests else 0f
-                        if (ratio >= bestRatio) {
+                        if (ratio > bestRatio) {
                             bestRatio = ratio
                             bestCmd = cmd
                             bestSiteSummary = result.siteResults.joinToString("\n") { site -> "${site.site}: ${site.successCount}/${site.totalCount}" }
+                            improvedInThisGen = true
+
+                            // Сохраняем лучший результат в SharedPreferences
+                            val prefs = getPreferences()
+                            prefs.edit {
+                                putString("evolution_last_best_cmd", bestCmd)
+                                putFloat("evolution_last_best_rate", bestRatio)
+                                putString("evolution_last_best_summary", bestSiteSummary)
+                            }
                         }
 
                         updateState {
@@ -196,6 +216,12 @@ class GeneticEvolutionService : Service() {
                         }
                     }
 
+                    if (improvedInThisGen) {
+                        stagnationCount = 0
+                    } else {
+                        stagnationCount++
+                    }
+
                     currentPopulation = genResults
 
                     // Сохраняем лучший результат в ML-модель
@@ -206,8 +232,10 @@ class GeneticEvolutionService : Service() {
                     val nextGenCmds = GeneticMutationEngine.generateNextGeneration(
                         currentResults = currentPopulation,
                         targetCount = settings.populationSize,
-                        mutationRate = settings.mutationRate,
-                        sni = settings.sni
+                        baseMutationRate = settings.mutationRate,
+                        sni = settings.sni,
+                        testedHistory = testedHistory,
+                        stagnationGenerations = stagnationCount
                     )
 
                     curCmds.clear()
