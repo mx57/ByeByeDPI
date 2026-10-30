@@ -2,6 +2,7 @@ package io.github.romanvht.byedpi.adapters
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Color
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -9,13 +10,15 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-import io.github.romanvht.byedpi.R
-import io.github.romanvht.byedpi.data.StrategyResult
 import androidx.core.view.isGone
 import androidx.core.view.isVisible
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.button.MaterialButton
+import io.github.romanvht.byedpi.R
+import io.github.romanvht.byedpi.data.StrategyResult
 import io.github.romanvht.byedpi.utility.ClipboardUtils
 
 class StrategyResultAdapter(
@@ -28,9 +31,12 @@ class StrategyResultAdapter(
 
     class StrategyViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val commandTextView: TextView = view.findViewById(R.id.commandTextView)
+        val tvPassRateBadge: TextView = view.findViewById(R.id.tvPassRateBadge)
         val progressLayout: LinearLayout = view.findViewById(R.id.progressLayout)
         val progressBar: ProgressBar = view.findViewById(R.id.progressBar)
         val progressTextView: TextView = view.findViewById(R.id.progressTextView)
+        val btnApplyStrategy: MaterialButton = view.findViewById(R.id.btnApplyStrategy)
+        val btnCopyStrategy: MaterialButton = view.findViewById(R.id.btnCopyStrategy)
         val expandButton: LinearLayout = view.findViewById(R.id.expandButton)
         val expandTextView: TextView = view.findViewById(R.id.expandTextView)
         val expandIcon: ImageView = view.findViewById(R.id.expandIcon)
@@ -45,6 +51,22 @@ class StrategyResultAdapter(
             val position = holder.bindingAdapterPosition
             if (position != RecyclerView.NO_POSITION) {
                 showCommandMenu(strategies[position].command)
+            }
+        }
+
+        holder.btnApplyStrategy.setOnClickListener {
+            val position = holder.bindingAdapterPosition
+            if (position != RecyclerView.NO_POSITION) {
+                onApply(strategies[position].command)
+            }
+        }
+
+        holder.btnCopyStrategy.setOnClickListener {
+            val position = holder.bindingAdapterPosition
+            if (position != RecyclerView.NO_POSITION) {
+                val cmd = strategies[position].command
+                ClipboardUtils.copy(context, cmd, "command")
+                Toast.makeText(context, "Команда скопирована", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -64,6 +86,18 @@ class StrategyResultAdapter(
         val strategy = strategies[position]
 
         holder.commandTextView.text = strategy.command
+
+        val passRate = if (strategy.totalRequests > 0) {
+            (strategy.successCount.toFloat() / strategy.totalRequests.toFloat() * 100).toInt()
+        } else 0
+
+        holder.tvPassRateBadge.text = "$passRate%"
+        val badgeColor = when {
+            passRate >= 80 -> Color.parseColor("#388E3C") // Зеленый
+            passRate >= 40 -> Color.parseColor("#F57C00") // Оранжевый
+            else -> Color.parseColor("#D32F2F") // Красный
+        }
+        holder.tvPassRateBadge.setBackgroundColor(badgeColor)
 
         if (strategy.totalRequests > 0) {
             holder.progressLayout.visibility = View.VISIBLE
@@ -113,6 +147,12 @@ class StrategyResultAdapter(
             super.onBindViewHolder(holder, position, payloads)
         } else {
             val strategy = strategies[position]
+
+            val passRate = if (strategy.totalRequests > 0) {
+                (strategy.successCount.toFloat() / strategy.totalRequests.toFloat() * 100).toInt()
+            } else 0
+
+            holder.tvPassRateBadge.text = "$passRate%"
 
             if (strategy.totalRequests > 0) {
                 holder.progressLayout.visibility = View.VISIBLE
